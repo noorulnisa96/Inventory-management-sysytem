@@ -1,219 +1,154 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Management</title>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #fff0f6;
-            color: #444;
-            margin: 0;
-            padding: 0;
-            text-align: center;
-        }
-        header {
-            background: pink;
-            color: white;
-            padding: 15px;
-            font-size: 24px;
-        }
-        .container {
-            margin-top: 40px;
-        }
-        button {
-            background: pink;
-            border: none;
-            padding: 15px 25px;
-            font-size: 18px;
-            margin: 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        button:hover {
-            background: #ff80aa;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            left: 0; top: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
-            justify-content: center; align-items: center;
-        }
-        .modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 350px;
-            text-align: left;
-        }
-        input {
-            width: 100%;
-            padding: 10px;
-            margin-top: 8px;
-            margin-bottom: 12px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-        }
-        #qr-reader {
-            width: 100%;
-            margin-top: 10px;
-        }
-        #qr-result {
-            margin-top: 8px;
-            font-size: 14px;
-            color: green;
-            font-weight: bold;
-        }
-        .inventory {
-            margin-top: 40px;
-            width: 90%;
-            max-width: 500px;
-            margin-left: auto;
-            margin-right: auto;
-            text-align: left;
-        }
-        .inventory-item {
-            background: white;
-            padding: 12px;
-            border: 1px solid #ddd;
-            margin-bottom: 10px;
-            border-radius: 6px;
-        }
-        .save-btn {
-            background: #ff4da6;
-            color: white;
-            margin-top: 20px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Management</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background-color: #ffe6f0;
+    }
+    button {
+      padding: 1rem;
+      margin: 1rem;
+      font-size: 1.2rem;
+      background-color: #ff66b2;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #ff3385;
+    }
+    #reader {
+      width: 300px;
+      margin-top: 1rem;
+      background-color: white;
+      padding: 1rem;
+      border-radius: 10px;
+    }
+    .hidden {
+      display: none;
+    }
+    table {
+      width: 100%;
+      margin-top: 2rem;
+      border-collapse: collapse;
+      background-color: white;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    th {
+      background-color: #ffb3d9;
+    }
+  </style>
 </head>
 <body>
-    <header>Inventory Management</header>
+  <h1 style="color: #ff3399;">Inventory Management</h1>
+  <button onclick="startScanner('add')">Add New Product</button>
+  <button onclick="startScanner('sold')">Mark as Sold</button>
+  <button onclick="saveToStorage()">Save Data</button>
+  <button onclick="clearData()">Reset Inventory</button>
 
-    <div class="container">
-        <button onclick="openModal('add')">Add Product</button>
-        <button onclick="openModal('sold')">Sold Out</button>
-        <button class="save-btn" onclick="saveData()">Save Data</button>
-        <button class="save-btn" onclick="resetInventory()" style="background:#ff6666;">Reset Inventory</button>
-    </div>
+  <div id="reader" class="hidden"></div>
 
-    <!-- Inventory List -->
-    <div class="inventory" id="inventory"></div>
+  <table id="productTable">
+    <thead>
+      <tr>
+        <th>Barcode</th>
+        <th>Sold Count</th>
+      </tr>
+    </thead>
+    <tbody id="productList"></tbody>
+  </table>
 
-    <!-- Modal -->
-    <div class="modal" id="modal">
-        <div class="modal-content">
-            <h3 id="modalTitle">Add Product</h3>
-            <label>Product Name</label>
-            <input type="text" id="productName" placeholder="Enter product name">
-            <label>QR Code</label>
-            <div id="qr-reader"></div>
-            <p id="qr-result">Scanned Code: <span id="scanned-code">None</span></p>
-            <input type="text" id="qrCode" placeholder="Scan or enter QR code manually">
-            <button onclick="submitData()">Submit</button>
-            <button style="background:#ccc; margin-top:8px;" onclick="closeModal()">Cancel</button>
-        </div>
-    </div>
+  <script>
+    const dbKey = 'inventoryData';
+    let scanner;
+    let inventoryData = JSON.parse(localStorage.getItem(dbKey)) || {};
 
-    <script>
-        let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
-        let mode = 'add';
-        let qrScanner;
+    // ✅ Beep sound generator (works on mobile and desktop)
+    function playBeep() {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      oscillator.frequency.setValueAtTime(600, ctx.currentTime);
+      oscillator.start();
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
+      oscillator.stop(ctx.currentTime + 0.2);
+    }
 
-        function playBeep() {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-            oscillator.type = 'sine'; 
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
-            oscillator.frequency.setValueAtTime(600, ctx.currentTime);
-            oscillator.start();
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
-            oscillator.stop(ctx.currentTime + 0.2);
+    function loadInventory() {
+      const tbody = document.getElementById('productList');
+      tbody.innerHTML = '';
+      Object.entries(inventoryData).forEach(([barcode, info]) => {
+        const row = `<tr><td>${barcode}</td><td>${info.sold}</td></tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    function saveToStorage() {
+      localStorage.setItem(dbKey, JSON.stringify(inventoryData));
+      loadInventory();
+      alert('Data saved!');
+    }
+
+    function clearData() {
+      if (confirm('Are you sure you want to reset all inventory data?')) {
+        localStorage.removeItem(dbKey);
+        inventoryData = {};
+        loadInventory();
+        alert('Inventory reset successfully.');
+      }
+    }
+
+    function handleScanResult(barcode, mode) {
+      if (mode === 'add') {
+        if (!inventoryData[barcode]) {
+          inventoryData[barcode] = { sold: 0 };
+          alert(`Product ${barcode} added!`);
+        } else {
+          alert('Product already exists!');
         }
-
-        function openModal(type) {
-            mode = type;
-            document.getElementById('modalTitle').innerText = type === 'add' ? 'Add Product' : 'Sold Out Product';
-            document.getElementById('productName').value = '';
-            document.getElementById('qrCode').value = '';
-            document.getElementById('scanned-code').innerText = 'None';
-            document.getElementById('productName').disabled = (type === 'sold');
-            document.getElementById('modal').style.display = 'flex';
-            startScanner();
+      } else if (mode === 'sold') {
+        if (inventoryData[barcode]) {
+          inventoryData[barcode].sold++;
+          alert(`Sold count updated for ${barcode}!`);
+          playBeep(); // ✅ Beep only when sold scan is successful
+        } else {
+          alert('Product not found in inventory!');
         }
+      }
+      saveToStorage();
+      scanner.clear();
+      document.getElementById('reader').classList.add('hidden');
+    }
 
-        function closeModal() {
-            document.getElementById('modal').style.display = 'none';
-            if (qrScanner) qrScanner.stop().catch(err => console.log(err));
+    function startScanner(mode) {
+      document.getElementById('reader').classList.remove('hidden');
+      scanner = new Html5Qrcode("reader");
+      scanner.start(
+        { facingMode: "environment" }, // ✅ Works on phone (back camera)
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+          scanner.pause();
+          handleScanResult(decodedText, mode);
         }
+      ).catch((err) => console.error(err));
+    }
 
-        function startScanner() {
-            qrScanner = new Html5Qrcode("qr-reader");
-            qrScanner.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 200 },
-                qrCodeMessage => {
-                    document.getElementById('qrCode').value = qrCodeMessage;
-                    document.getElementById('scanned-code').innerText = qrCodeMessage;
-                }
-            ).catch(err => console.log(err));
-        }
-
-        function submitData() {
-            let name = document.getElementById('productName').value.trim();
-            let qr = document.getElementById('qrCode').value.trim();
-
-            if (mode === 'add') {
-                if (!name || !qr) { alert('Fill all fields!'); return; }
-                inventory.push({ name, qr, sold: 0 });
-                playBeep();
-            } else {
-                let product = inventory.find(item => item.qr === qr);
-                if (product) {
-                    product.sold += 1;
-                    playBeep();
-                } else {
-                    alert('Product not found!');
-                }
-            }
-            closeModal();
-            renderInventory();
-        }
-
-        function renderInventory() {
-            let list = document.getElementById('inventory');
-            list.innerHTML = '';
-            inventory.forEach(item => {
-                list.innerHTML += `
-                    <div class="inventory-item">
-                        <b>${item.name}</b><br>
-                        QR: ${item.qr} <br>
-                        Sold: ${item.sold}
-                    </div>`;
-            });
-        }
-
-        function saveData() {
-            localStorage.setItem('inventory', JSON.stringify(inventory));
-            alert('Data Saved!');
-        }
-
-        function resetInventory() {
-            if (confirm("Are you sure you want to reset the entire inventory? This cannot be undone.")) {
-                inventory = [];
-                localStorage.removeItem('inventory');
-                renderInventory();
-                alert("Inventory has been reset!");
-            }
-        }
-
-        renderInventory();
-    </script>
+    loadInventory();
+  </script>
 </body>
 </html>
+
